@@ -240,12 +240,7 @@ class Atlas(nn.Module):
                 add_special_tokens=False,
             )["attention_mask"]
 
-            padding = torch.zeros(
-                (
-                    query_mask.size(0),
-                    target_tokens["input_ids"].size(-1) - query_mask.size(-1),
-                )
-            )
+            padding = torch.zeros((query_mask.size(0), target_tokens["input_ids"].size(-1) - query_mask.size(-1)))
             query_mask = torch.cat([query_mask, padding], dim=1)
             labels = labels.masked_fill(query_mask.bool(), IGNORE_INDEX)
 
@@ -374,9 +369,7 @@ class Atlas(nn.Module):
                     use_cache=False,
                 )
                 token_loss = nn.functional.cross_entropy(
-                    loo_output_eval.logits.view(-1, loo_output_eval.logits.size(-1)),
-                    labels.view(-1),
-                    reduction="none",
+                    loo_output_eval.logits.view(-1, loo_output_eval.logits.size(-1)), labels.view(-1), reduction="none"
                 )
                 mean_loss = token_loss.view(bsz, labels.shape[-1]).sum(dim=-1) / (labels > -1).sum(-1)
                 gold_scores.append(mean_loss)
@@ -476,13 +469,7 @@ class Atlas(nn.Module):
 
             if "eval" in self.opt.gold_score_mode:
                 gold_score = self.eval_score(
-                    reader_ids,
-                    reader_mask,
-                    decoder_input_ids,
-                    labels,
-                    cfg,
-                    bsz,
-                    query_mask_reader,
+                    reader_ids, reader_mask, decoder_input_ids, labels, cfg, bsz, query_mask_reader
                 )
             elif "loop" in self.opt.gold_score_mode:
                 gold_score = self.loop_score(reader_ids, reader_mask, decoder_input_ids, labels, cfg, bsz)
@@ -613,9 +600,11 @@ class Atlas(nn.Module):
         bos_token_id = None
 
         prefix_allowed_tokens_fn = None
-        if self.opt.decoder_prompt_format is not None:
-            prefix_str = [self.opt.decoder_prompt_format.format_map({"query": q}) for q in query]
-            prefix_allowed_tokens_fn = self.get_prefix_allowed_tokens_fn(prefix_str)
+        # if self.opt.decoder_prompt_format is not None:
+        #     prefix_str = [self.opt.decoder_prompt_format.format_map({"query": q}) for q in query]
+        #     prefix_allowed_tokens_fn = self.get_prefix_allowed_tokens_fn(prefix_str)
+        if choices is not None:
+            prefix_allowed_tokens_fn = self.get_prefix_allowed_choices_fn(choices)
 
         outputs = self.reader.generate(
             input_ids=tokens["input_ids"].cuda(),
@@ -630,6 +619,46 @@ class Atlas(nn.Module):
         )
 
         return outputs
+
+    def get_prefix_allowed_choices_fn(self, choices: Optional[str] = None):
+        def get_choice_dict(choices_dict, choice_entry):
+            if choice_entry[0] not in choices_dict: 
+                if len(choice_entry) > 1:
+                    sub_choice_dict = {}
+                    choices_dict[choice_entry[0]] = get_choice_dict(sub_choice_dict, choice_entry[1:])
+                else:
+                    choices_dict[choice_entry[0]] = {self.reader_tokenizer.eos_token_id: None}
+            else:
+                if len(choice_entry) > 1:
+                    choices_dict[choice_entry[0]] = get_choice_dict(choices_dict[choice_entry[0]], choice_entry[1:])
+                else:
+                    choices_dict[choice_entry[0]][self.reader_tokenizer.eos_token_id] = None
+            return choices_dict
+        if choices:
+            choices_tokens_ids = self.reader_tokenizer.batch_encode_plus(choices, add_special_tokens=False)[
+                    "input_ids"
+                ]
+            choices_dict = {}
+            for val in choices_tokens_ids:
+                choices_dict = get_choice_dict(choices_dict, val)
+                
+            start_tokens_ids = self.reader_tokenizer.batch_encode_plus(["<extra_id_0>"], add_special_tokens=False)[
+                    "input_ids"
+                ]
+            def prefix_allowed_tokens_fn(batch_id: int, input_ids: torch.Tensor) -> List[int]:
+                if input_ids.shape[-1]-1 < len(start_tokens_ids): #-1 accounts for initial pad token
+                    return start_tokens_ids[input_ids.shape[-1] - 1]
+                else:
+                    #find if has started to match some choice and keep that match in that case
+                    available_choices = choices_dict
+                    for val in input_ids[len(start_tokens_ids)+1:]:
+                        available_choices = available_choices[val.cpu().item()]
+                    return list(available_choices.keys())
+                    
+        else:
+            prefix_allowed_tokens_fn = None
+        
+        return prefix_allowed_tokens_fn
 
     def get_prefix_allowed_tokens_fn(self, prefix_str: Optional[str] = None):
         if prefix_str:
@@ -657,4 +686,6 @@ def select_crossattention_scores(scores, mode):
 
 
 def _to_cuda(tok_dict):
+    if tok_dict is None:
+        return None
     return {k: v.cuda() for k, v in tok_dict.items()}

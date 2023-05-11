@@ -15,11 +15,7 @@ import logging
 from evaluate import evaluate
 from src import dist_utils, slurm, util
 from src.index_io import load_or_initialize_index, save_embeddings_and_index
-from src.model_io import (
-    create_checkpoint_directories,
-    load_or_initialize_atlas_model,
-    save_atlas_model,
-)
+from src.model_io import create_checkpoint_directories, load_or_initialize_atlas_model, save_atlas_model
 from src.options import get_options
 from src.tasks import get_task
 
@@ -50,6 +46,9 @@ def train(
     # different seed for different sampling depending on global_rank
     torch.manual_seed(opt.global_rank + opt.seed)
 
+    train_filenames = [os.path.splitext(os.path.basename(val))[0] for val in opt.train_data]
+    train_filenames = (",").join(train_filenames)
+
     scale = 2.0
     grad_stats = defaultdict(lambda: [])
     task = get_task(opt, unwrapped_model.reader_tokenizer)
@@ -58,11 +57,7 @@ def train(
     )
     while step < opt.total_steps:
         data_iterator = task.data_iterator(
-            opt.train_data,
-            opt.global_rank,
-            opt.world_size,
-            repeat_if_less_than_world_size=True,
-            opt=opt,
+            opt.train_data, opt.global_rank, opt.world_size, repeat_if_less_than_world_size=True, opt=opt
         )
         data_iterator = filter(None, map(task.process, data_iterator))
         data_iterator = task.batch_iterator(data_iterator, opt.per_gpu_batch_size, drop_last=True, shuffle=opt.shuffle)
@@ -156,6 +151,7 @@ def train(
                 run_stats.reset()
 
             if step % opt.eval_freq == 0:
+                metric_dict = {}
                 for data_path in opt.eval_data:
                     dataset_name = os.path.basename(data_path)
 
@@ -165,9 +161,20 @@ def train(
                         log_message += f" | {v:.3f} {k}"
                         if tb_logger:
                             tb_logger.add_scalar(f"{dataset_name}/{k}", v, step)
+                            metric_dict[f"{dataset_name.replace('_100','')}/{k}"] = v
+                            
                     logger.info(log_message)
+                if tb_logger:    
+                    tb_logger.add_hparams(hparam_dict={'train_steps': step,
+                                        'lr_reader': opt.lr,
+                                        'lr_retriever': opt.lr_retriever,
+                                        'batch_size': opt.world_size*opt.per_gpu_batch_size,
+                                        'retriever_temperature': opt.temperature_score,
+                                        'n_context': opt.n_context,
+                                        'train_data': train_filenames},
+                                        metric_dict=metric_dict)
 
-            if step % opt.save_freq == 0:
+            if step % opt.save_freq == 0 and opt.is_main:
                 save_atlas_model(
                     unwrapped_model,
                     optimizer,
@@ -201,15 +208,7 @@ if __name__ == "__main__":
     logger.info(f"world size: {dist_utils.get_world_size()}")
 
     index, passages = load_or_initialize_index(opt)
-    (
-        model,
-        optimizer,
-        scheduler,
-        retr_optimizer,
-        retr_scheduler,
-        opt,
-        step,
-    ) = load_or_initialize_atlas_model(opt)
+    model, optimizer, scheduler, retr_optimizer, retr_scheduler, opt, step = load_or_initialize_atlas_model(opt)
 
     if opt.is_distributed:
         if opt.shard_grads:

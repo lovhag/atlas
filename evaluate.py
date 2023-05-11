@@ -68,11 +68,7 @@ def run_retrieval_only(model, index, opt, data_path, step=None):
         for k in range(len(retrieved_passages)):
             if opt.write_results:
                 gold = [answers[k]] if not "answers" in batch else batch["answers"][k]
-                ex = {
-                    "query": query[k],
-                    "answers": gold,
-                    "passages": retrieved_passages[k],
-                }
+                ex = {"query": query[k], "answers": gold, "passages": retrieved_passages[k]}
                 if batch_metadata is not None:
                     ex["metadata"] = batch_metadata[k]
                 if "id" in batch:
@@ -97,6 +93,12 @@ def evaluate(model, index, opt, data_path, step=None):
 
     task = get_task(opt, reader_tokenizer)
     data_iterator = _get_eval_data_iterator(opt, data_path, task)
+    
+    decoder_choices = None
+    if opt.use_decoder_choices:
+        decoder_choices_file = os.path.splitext(data_path)[0]+"_options.txt"
+        with open(decoder_choices_file) as f:
+            decoder_choices = [line.strip() for line in f.readlines()]
 
     for i, batch in enumerate(data_iterator):
         query = batch.get("query", [""])
@@ -104,21 +106,25 @@ def evaluate(model, index, opt, data_path, step=None):
         batch_metadata = batch.get("metadata")
         target_tokens = batch.get("target_tokens")
         query_enc, labels, decoder_input_ids = unwrapped_model.tokenize(query, answers, target_tokens=target_tokens)
-        if not opt.use_file_passages:
-            query_ids_retriever = query_enc["input_ids"].cuda()
-            query_mask_retriever = query_enc["attention_mask"].cuda()
-            retrieved_passages, _ = unwrapped_model.retrieve(
-                index,
-                opt.n_context,
-                query,
-                query_ids_retriever,
-                query_mask_retriever,
-                batch_metadata=batch_metadata,
-                filtering_fun=task.filter,
-            )
+        # handle case if we do not have a retriever
+        if query_enc is None:
+            retrieved_passages = [[{"title": None, "text": None}]*len(query)] # this will not matter later on, but should make the code run
         else:
-            assert "passages" in batch, "cant use use_file_passages mode without passing in passages"
-            retrieved_passages = [p[: opt.n_context] for p in batch["passages"]]
+            if not opt.use_file_passages:
+                query_ids_retriever = query_enc["input_ids"].cuda()
+                query_mask_retriever = query_enc["attention_mask"].cuda()
+                retrieved_passages, _ = unwrapped_model.retrieve(
+                    index,
+                    opt.n_context,
+                    query,
+                    query_ids_retriever,
+                    query_mask_retriever,
+                    batch_metadata=batch_metadata,
+                    filtering_fun=task.filter,
+                )
+            else:
+                assert "passages" in batch, "cant use use_file_passages mode without passing in passages"
+                retrieved_passages = [p[: opt.n_context] for p in batch["passages"]]
 
         # If example is a padding example then skip step
         if (len(query) == 0) or (len(query[0]) == 0):
@@ -131,16 +137,13 @@ def evaluate(model, index, opt, data_path, step=None):
             metrics["eval_loss"].append(eval_loss)
 
         generation = unwrapped_model.generate(
-            reader_tokens,
-            query,
-            choices=batch["choices"] if "choices" in batch else None,
+            reader_tokens, query, choices=decoder_choices
         )
 
         for k, g in enumerate(generation):
             if opt.decoder_prompt_format is not None:
                 query_ids = reader_tokenizer.encode(
-                    opt.decoder_prompt_format.format_map({"query": query[k]}),
-                    add_special_tokens=False,
+                    opt.decoder_prompt_format.format_map({"query": query[k]}), add_special_tokens=False
                 )
                 g = g[len(query_ids) + 1 :]
             pred = reader_tokenizer.decode(g, skip_special_tokens=True)
@@ -159,6 +162,10 @@ def evaluate(model, index, opt, data_path, step=None):
                     ex["choice_logits"] = task.get_choice_logits(logits[k])
                 if "id" in batch:
                     ex["id"] = batch["id"][k]
+                if "sub_label" in batch:
+                    ex["sub_label"] = batch["sub_label"][k]
+                if "pattern" in batch:
+                    ex["pattern"] = batch["pattern"][k]
                 dataset_wpred.append(ex)
 
     metrics, dataset_wpred = task.evaluation_postprocessing(metrics, dataset_wpred)
