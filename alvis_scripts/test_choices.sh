@@ -5,16 +5,16 @@ source venv/bin/activate
 
 size=base
 YEAR=${1:-"2017"}
-MODEL_TO_EVAL='data/experiments/853398-base-templama-2017/checkpoint/step-100' # Model finetuned on tempLAMA for 100 steps
+MODEL_TO_EVAL=data/models/atlas/${size}
 
 port=$(shuf -i 15000-16000 -n 1)
-EVAL_FILES="/cephyr/users/lovhag/Alvis/projects/pararel/data/all_n1_atlas/P279.jsonl"
+EVAL_FILES="/cephyr/users/lovhag/Alvis/projects/pararel/data/all_n1_atlas/P17_100.jsonl"
 PASSAGES="data/corpora/wiki/enwiki-dec${YEAR}-DEBUG/text-list-100-sec.jsonl data/corpora/wiki/enwiki-dec${YEAR}-DEBUG/infobox.jsonl"
 SAVE_DIR=data/experiments/
 EXPERIMENT_NAME=test-${size}-pararel-${YEAR}
 PRECISION="fp32" # "bf16"
 
-CUDA_VISIBLE_DEVICES=1 python -m debugpy --wait-for-client --listen 5678 -m evaluate \
+CUDA_VISIBLE_DEVICES=2 CUDA_LAUNCH_BLOCKING=1 python -m debugpy --wait-for-client --listen 5678 -m evaluate \
     --name ${EXPERIMENT_NAME} \
     --generation_max_length 32 --target_maxlength 32 \
     --gold_score_mode "ppmean" \
@@ -32,4 +32,7 @@ CUDA_VISIBLE_DEVICES=1 python -m debugpy --wait-for-client --listen 5678 -m eval
     --passages ${PASSAGES}\
     --write_results \
     --qa_prompt_format "{question}" \
-    --use_decoder_choices
+    --use_decoder_choices \
+    --generation_length_penalty -1 \
+    --generation_num_beams 3
+# check on how to handle decoding

@@ -588,6 +588,49 @@ class Atlas(nn.Module):
             use_cache=False,
         )
         return reader_loss[0].cpu().item(), reader_loss[1]
+    
+    @torch.no_grad()
+    def get_choice_generator_values(self,
+                              choices):
+        def add_3_after_sentinel_token(tokens, pos):
+            assert (tokens[:,pos-1]==32099).all(), "The 3 token should be added directly after the sentinel token"
+            tokens[:,pos+1:] = tokens[:,pos:-1].clone()
+            tokens[:,pos] = 3
+            return tokens
+        
+        assert self.opt.decoder_prompt_format is None, "Generating by choices doesn't work if a decoder prompt format has been set"
+        
+        formatted_choices = [f"<extra_id_0> {choice}" for choice in choices]
+        labels, decoder_input_ids = self.reader_tokenize(None, formatted_choices, target_tokens=None)
+        
+        labels = add_3_after_sentinel_token(labels.clone(), 1)
+        decoder_input_ids = add_3_after_sentinel_token(decoder_input_ids.clone(), 2)
+        
+        return labels, decoder_input_ids
+    
+    # TODO: rank predictions?   
+    @torch.no_grad()
+    def generate_from_choices_by_likelihood(self, 
+                                            reader_tokens,
+                                            query, 
+                                            choices,
+                                            choice_generator_labels, 
+                                            choice_generator_decoder_input_ids):
+            
+        likelihood_list = []
+        for labels, decoder_input_ids in zip(choice_generator_labels, choice_generator_decoder_input_ids):
+            start_of_pred_ix = (decoder_input_ids==3).nonzero().cpu().detach()[0][0]+1
+            end_of_pred_ix = (decoder_input_ids==1).nonzero().cpu().detach()[0][0]
+            loss, logits = self.compute_reader_loss_and_logits(reader_tokens, 
+                                                          decoder_input_ids.unsqueeze(0).repeat(reader_tokens['input_ids'].shape[0]) if reader_tokens['input_ids'].shape[0]>1 else decoder_input_ids.unsqueeze(0), 
+                                                          labels.unsqueeze(0).repeat(reader_tokens.shape[0]) if reader_tokens['input_ids'].shape[0]>1 else labels.unsqueeze(0))
+            # decoder logits start directly with sentinel id, decoder input ids start with <pad> token before sentinel id.
+            probs = nn.Softmax(2)(logits.clone())[:,start_of_pred_ix-1:end_of_pred_ix-1]
+            tot_prob = probs.gather(2, decoder_input_ids[start_of_pred_ix:end_of_pred_ix].unsqueeze(0).unsqueeze(2)).squeeze(2)
+            likelihood_list.append(tot_prob.prod(dim=1).cpu().numpy())
+        choice_ixs = np.array(likelihood_list).argmax(axis=0)
+        # dim 0 goes over batch size, return choice per sample in batch
+        return [choices[ix] for ix in choice_ixs] # pick over likelihood list values
 
     @torch.no_grad()
     def generate(self, tokens, query, choices=None):
@@ -600,11 +643,8 @@ class Atlas(nn.Module):
         bos_token_id = None
 
         prefix_allowed_tokens_fn = None
-        # if self.opt.decoder_prompt_format is not None:
-        #     prefix_str = [self.opt.decoder_prompt_format.format_map({"query": q}) for q in query]
-        #     prefix_allowed_tokens_fn = self.get_prefix_allowed_tokens_fn(prefix_str)
-        if choices is not None:
-            prefix_allowed_tokens_fn = self.get_prefix_allowed_choices_fn(choices)
+        #if choices is not None:
+        #    prefix_allowed_tokens_fn = self.get_prefix_allowed_choices_fn(choices)
 
         outputs = self.reader.generate(
             input_ids=tokens["input_ids"].cuda(),

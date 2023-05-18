@@ -5,7 +5,7 @@
 #SBATCH --ntasks-per-node=4
 #SBATCH --gpus-per-node=A40:4
 #SBATCH --job-name=eval-atlas-pararel
-#SBATCH -o /mimer/NOBACKUP/groups/snic2021-23-309/project-data/atlas/logs/pararel_eval_%A_%a.out
+#SBATCH -o /mimer/NOBACKUP/groups/snic2021-23-309/project-data/atlas/logs/pararel_eval_zero_shot_%A_%a.out
 #SBATCH -t 0-04:00:00
 
 set -eo pipefail
@@ -18,13 +18,13 @@ RELATION_TO_EVAL=${EVAL_RELATIONS[$SLURM_ARRAY_TASK_ID]}
 
 size=base
 YEAR=${1:-"2017"}
-MODEL_TO_EVAL='data/experiments/pararel-train-base-2017-XXX' # Model finetuned on Pararel
+MODEL_TO_EVAL=data/models/atlas/${size}
 
 port=$(shuf -i 15000-16000 -n 1)
 EVAL_FILES="/cephyr/users/lovhag/Alvis/projects/pararel/data/all_n1_atlas/${RELATION_TO_EVAL}.jsonl"
 PASSAGES="data/corpora/wiki/enwiki-dec${YEAR}/text-list-100-sec.jsonl data/corpora/wiki/enwiki-dec${YEAR}/infobox.jsonl"
-SAVE_DIR=data/experiments/
-EXPERIMENT_NAME=pararel-eval-${RELATION_TO_EVAL}-${size}-${YEAR}-${SLURM_JOB_ID}
+SAVE_DIR=data/experiments/pararel-eval-zero-shot-base
+EXPERIMENT_NAME=${RELATION_TO_EVAL}-${size}-${YEAR}-${SLURM_JOB_ID}
 PRECISION="fp32" # "bf16"
 
 srun python evaluate.py \
@@ -45,5 +45,6 @@ srun python evaluate.py \
     --passages ${PASSAGES}\
     --write_results \
     --qa_prompt_format "{question}" \
-    --load_index_path data/experiments/853398-base-templama-2017/saved_index \
-    --use_decoder_choices
+    --load_index_path data/saved_index/atlas-base-wiki-2017 \
+    --use_decoder_choices \
+    --generation_num_beams 1
