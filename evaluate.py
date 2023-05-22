@@ -99,7 +99,6 @@ def evaluate(model, index, opt, data_path, step=None):
         decoder_choices_file = os.path.splitext(data_path)[0]+"_options.txt"
         with open(decoder_choices_file) as f:
             decoder_choices = [line.strip() for line in f.readlines()]
-        choice_generator_labels, choice_generator_decoder_input_ids = unwrapped_model.get_choice_generator_values(decoder_choices)
 
     for i, batch in enumerate(data_iterator):
         query = batch.get("query", [""])
@@ -140,10 +139,6 @@ def evaluate(model, index, opt, data_path, step=None):
         generation = unwrapped_model.generate(
             reader_tokens, query, choices=decoder_choices
         )
-        
-        if opt.use_decoder_choices:
-            generation_by_choice = unwrapped_model.generate_from_choices_by_likelihood(
-                reader_tokens, query, decoder_choices, choice_generator_labels, choice_generator_decoder_input_ids)
 
         for k, g in enumerate(generation):
             if opt.decoder_prompt_format is not None:
@@ -151,16 +146,7 @@ def evaluate(model, index, opt, data_path, step=None):
                     opt.decoder_prompt_format.format_map({"query": query[k]}), add_special_tokens=False
                 )
                 g = g[len(query_ids) + 1 :]
-            preds = None
-            if model.reader_tokenizer.additional_special_tokens_ids[0] in g:
-                split_ix = torch.isin(g, torch.tensor(model.reader_tokenizer.additional_special_tokens_ids+[1]).cuda()).nonzero()
-                preds = []
-                for ix in range(len(split_ix)-1):
-                    tmp_pred = g[split_ix[ix]:split_ix[ix+1]]
-                    preds.append(reader_tokenizer.decode(tmp_pred, skip_special_tokens=True))
-                pred = preds[0]
-            else:
-                pred = reader_tokenizer.decode(g, skip_special_tokens=True)
+            pred = reader_tokenizer.decode(g, skip_special_tokens=True).strip()
             gold = [answers[k]] if not "answers" in batch else batch["answers"][k]
             sample_metrics = task.evaluation(pred, gold)
             for key, value in sample_metrics.items():
@@ -168,10 +154,6 @@ def evaluate(model, index, opt, data_path, step=None):
 
             if opt.write_results:
                 ex = {"query": query[k], "answers": gold, "generation": pred}
-                if preds is not None:
-                    ex["generations"] = preds
-                if opt.use_decoder_choices:
-                    ex["generation_by_choice"] = generation_by_choice[k]
                 if not opt.dont_write_passages:
                     ex["passages"] = retrieved_passages[k]
                 if batch_metadata is not None:

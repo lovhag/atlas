@@ -588,49 +588,6 @@ class Atlas(nn.Module):
             use_cache=False,
         )
         return reader_loss[0].cpu().item(), reader_loss[1]
-    
-    @torch.no_grad()
-    def get_choice_generator_values(self,
-                              choices):
-        def add_3_after_sentinel_token(tokens, pos):
-            assert (tokens[:,pos-1]==32099).all(), "The 3 token should be added directly after the sentinel token"
-            tokens[:,pos+1:] = tokens[:,pos:-1].clone()
-            tokens[:,pos] = 3
-            return tokens
-        
-        assert self.opt.decoder_prompt_format is None, "Generating by choices doesn't work if a decoder prompt format has been set"
-        
-        formatted_choices = [f"<extra_id_0> {choice}" for choice in choices]
-        labels, decoder_input_ids = self.reader_tokenize(None, formatted_choices, target_tokens=None)
-        
-        labels = add_3_after_sentinel_token(labels.clone(), 1)
-        decoder_input_ids = add_3_after_sentinel_token(decoder_input_ids.clone(), 2)
-        
-        return labels, decoder_input_ids
-    
-    # TODO: rank predictions?   
-    @torch.no_grad()
-    def generate_from_choices_by_likelihood(self, 
-                                            reader_tokens,
-                                            query, 
-                                            choices,
-                                            choice_generator_labels, 
-                                            choice_generator_decoder_input_ids):
-            
-        likelihood_list = []
-        for labels, decoder_input_ids in zip(choice_generator_labels, choice_generator_decoder_input_ids):
-            start_of_pred_ix = (decoder_input_ids==3).nonzero().cpu().detach()[0][0]+1
-            end_of_pred_ix = (decoder_input_ids==1).nonzero().cpu().detach()[0][0]
-            loss, logits = self.compute_reader_loss_and_logits(reader_tokens, 
-                                                          decoder_input_ids.unsqueeze(0).repeat(reader_tokens['input_ids'].shape[0]) if reader_tokens['input_ids'].shape[0]>1 else decoder_input_ids.unsqueeze(0), 
-                                                          labels.unsqueeze(0).repeat(reader_tokens.shape[0]) if reader_tokens['input_ids'].shape[0]>1 else labels.unsqueeze(0))
-            # decoder logits start directly with sentinel id, decoder input ids start with <pad> token before sentinel id.
-            probs = nn.Softmax(2)(logits.clone())[:,start_of_pred_ix-1:end_of_pred_ix-1]
-            tot_prob = probs.gather(2, decoder_input_ids[start_of_pred_ix:end_of_pred_ix].unsqueeze(0).unsqueeze(2)).squeeze(2)
-            likelihood_list.append(tot_prob.prod(dim=1).cpu().numpy())
-        choice_ixs = np.array(likelihood_list).argmax(axis=0)
-        # dim 0 goes over batch size, return choice per sample in batch
-        return [choices[ix] for ix in choice_ixs] # pick over likelihood list values
 
     @torch.no_grad()
     def generate(self, tokens, query, choices=None):
@@ -643,8 +600,9 @@ class Atlas(nn.Module):
         bos_token_id = None
 
         prefix_allowed_tokens_fn = None
-        #if choices is not None:
-        #    prefix_allowed_tokens_fn = self.get_prefix_allowed_choices_fn(choices)
+        if choices is not None:
+            assert self.opt.generation_num_beams==1, "Generating from choices doesn't work with beam search."
+            prefix_allowed_tokens_fn = self.get_prefix_allowed_choices_fn(choices)
 
         outputs = self.reader.generate(
             input_ids=tokens["input_ids"].cuda(),
@@ -682,15 +640,18 @@ class Atlas(nn.Module):
             for val in choices_tokens_ids:
                 choices_dict = get_choice_dict(choices_dict, val)
                 
-            start_tokens_ids = self.reader_tokenizer.batch_encode_plus(["<extra_id_0>"], add_special_tokens=False)[
+            start_tokens_ids = self.reader_tokenizer("<extra_id_0>", add_special_tokens=False)[
                     "input_ids"
                 ]
+            start_tokens_ids+=[3] #the model relies on starting with a 3 before generation
             def prefix_allowed_tokens_fn(batch_id: int, input_ids: torch.Tensor) -> List[int]:
-                if input_ids.shape[-1]-1 < len(start_tokens_ids): #-1 accounts for initial pad token
-                    return start_tokens_ids[input_ids.shape[-1] - 1]
+                # the initial tokens will look like [0, 32099, 3, <rest of generation>]
+                if input_ids.shape[-1]-1 < len(start_tokens_ids): #generate first necessary output part, deduct 1 to account for necessary pad
+                    return start_tokens_ids[input_ids.shape[-1]-1]
                 else:
                     #find if has started to match some choice and keep that match in that case
                     available_choices = choices_dict
+                    # move along allowed generations with input ids, add +1 to account for pad
                     for val in input_ids[len(start_tokens_ids)+1:]:
                         available_choices = available_choices[val.cpu().item()]
                     return list(available_choices.keys())

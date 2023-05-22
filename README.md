@@ -130,6 +130,8 @@ Evaluation of parameter- and fine-tuned model on full ParaRel done with `alvis_s
 
 ## Evaluate Atlas out-of-the-box on ParaRel
 
-Atlas has been pretrained on the MLM task, so it should logically not need to be tuned to the MASK format of ParaRel. We investigate this hypothesis by evaluating Atlas out-of-the-box on ParaRel with `alvis_scripts/eval_without_tuning.sh`. This means that we can evaluate Atlas on all 30 ParaRel relations (we skip P37 which is not a N-1 relation).
+Atlas has been pretrained on the MLM task, so it should logically not need to be tuned to the MASK format of ParaRel. Thus, we should be able to evaluate Atlas out-of-the-box on ParaRel. This means that we can evaluate Atlas on all 30 ParaRel relations (we skip P37 which is not a N-1 relation).
 
-However, after an initial evaluation on P138, it is quite evident that zero-shot Atlas performs very poorly. This is due to the constrained decoding. Should implement a likelihood-based answer generation instead.
+However, the decoding of Atlas' predictions must be in the correct format for the model. Otherwise, it would be necessary to fine-tune the model to the format. The generations of Atlas look as follows `[0, 32099, 3, ...]`, so the constrained decoding (`prefix_allowed_tokens_fn`) must follow this format.
+
+The current results for Atlas with retrieval can be found under `pararel-eval-zero-shot-base` and `hyperparam-tuned`. The current baseline results can be found under `pararel-eval-baseline-closed-book` and `hyperparam-tuned-closed-book`.

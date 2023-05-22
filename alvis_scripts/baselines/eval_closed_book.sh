@@ -4,12 +4,12 @@
 #SBATCH -N 1
 #SBATCH --ntasks-per-node=4
 #SBATCH --gpus-per-node=A40:4
-#SBATCH --job-name=eval-baseline-t5-pararel
-#SBATCH -o /mimer/NOBACKUP/groups/snic2021-23-309/project-data/atlas/logs/pararel_eval_baseline_t5_%A_%a.out
+#SBATCH --job-name=eval-atlas-closed-book-pararel
+#SBATCH -o /mimer/NOBACKUP/groups/snic2021-23-309/project-data/atlas/logs/pararel_eval_closed_book_%A_%a.out
 #SBATCH -t 0-04:00:00
 
 
-# COMMENT: this is largely a copy of eval.sh, only without retrieval and for a baseline T5
+# COMMENT: this is largely a copy of eval.sh, only without retrieval for atlas
 set -eo pipefail
 
 module load PyTorch/1.11.0-foss-2021a-CUDA-11.3.1
@@ -21,15 +21,16 @@ RELATION_TO_EVAL=${EVAL_RELATIONS[$SLURM_ARRAY_TASK_ID]}
 
 size=base
 YEAR=${1:-"2017"}
-MODEL_TO_EVAL='google/t5-base-lm-adapt' # baseline T5 model
+MODEL_TO_EVAL=data/models/atlas/${size}
 
 port=$(shuf -i 15000-16000 -n 1)
 EVAL_FILES="/cephyr/users/lovhag/Alvis/projects/pararel/data/all_n1_atlas/${RELATION_TO_EVAL}.jsonl"
-SAVE_DIR=data/experiments/pararel-eval-baseline-t5
+PASSAGES="data/corpora/wiki/enwiki-dec${YEAR}/text-list-100-sec.jsonl data/corpora/wiki/enwiki-dec${YEAR}/infobox.jsonl"
+SAVE_DIR=data/experiments/pararel-eval-baseline-closed-book
 EXPERIMENT_NAME=${RELATION_TO_EVAL}-${SLURM_JOB_ID}
 PRECISION="fp32" # "bf16"
 
-srun python evaluate_baseline.py \
+srun python evaluate.py \
     --name ${EXPERIMENT_NAME} \
     --generation_max_length 32 --target_maxlength 32 \
     --gold_score_mode "ppmean" \
@@ -39,10 +40,14 @@ srun python evaluate_baseline.py \
     --model_path ${MODEL_TO_EVAL} \
     --eval_data ${EVAL_FILES} \
     --per_gpu_batch_size 1 \
+    --n_context 20 --retriever_n_context 30 \
     --checkpoint_dir ${SAVE_DIR} \
     --main_port $port \
+    --index_mode "flat" \
     --task "qa" \
+    --passages ${PASSAGES} \
     --write_results \
     --qa_prompt_format "{question}" \
+    --load_index_path data/saved_index/atlas-base-wiki-2017 \
     --use_decoder_choices \
     --closed_book

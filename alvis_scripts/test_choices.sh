@@ -34,5 +34,5 @@ CUDA_VISIBLE_DEVICES=2 CUDA_LAUNCH_BLOCKING=1 python -m debugpy --wait-for-clien
     --qa_prompt_format "{question}" \
     --use_decoder_choices \
     --generation_length_penalty -1 \
-    --generation_num_beams 3
+    --generation_num_beams 1
 # check on how to handle decoding
