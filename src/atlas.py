@@ -620,6 +620,11 @@ class Atlas(nn.Module):
 
     def get_prefix_allowed_choices_fn(self, choices: Optional[str] = None):
         def get_choice_dict(choices_dict, choice_entry):
+            # choices_dict describes a tree structure of allowed generations
+            # if you have e.g. generated [3, 4] choices_dict([3, 4]) gives you the allowed continued generations based on this
+            # choice_entry is a choice alternative to be added to the dict
+            
+            # choice entry can consist of several tokens, if the first token isn't there, add it.
             if choice_entry[0] not in choices_dict: 
                 if len(choice_entry) > 1:
                     sub_choice_dict = {}
@@ -633,6 +638,7 @@ class Atlas(nn.Module):
                     choices_dict[choice_entry[0]][self.reader_tokenizer.eos_token_id] = None
             return choices_dict
         if choices:
+            #choices = [" "+choice for choice in choices]
             choices_tokens_ids = self.reader_tokenizer.batch_encode_plus(choices, add_special_tokens=False)[
                     "input_ids"
                 ]
@@ -643,9 +649,9 @@ class Atlas(nn.Module):
             start_tokens_ids = self.reader_tokenizer("<extra_id_0>", add_special_tokens=False)[
                     "input_ids"
                 ]
-            start_tokens_ids+=[3] #the model relies on starting with a 3 before generation
+            #start_tokens_ids+=[3] #the model relies on starting with a 3 before generation
             def prefix_allowed_tokens_fn(batch_id: int, input_ids: torch.Tensor) -> List[int]:
-                # the initial tokens will look like [0, 32099, 3, <rest of generation>]
+                # the initial tokens will look like [0, 32099, <rest of generation>]
                 if input_ids.shape[-1]-1 < len(start_tokens_ids): #generate first necessary output part, deduct 1 to account for necessary pad
                     return start_tokens_ids[input_ids.shape[-1]-1]
                 else:

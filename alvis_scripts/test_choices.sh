@@ -8,10 +8,10 @@ YEAR=${1:-"2017"}
 MODEL_TO_EVAL=data/models/atlas/${size}
 
 port=$(shuf -i 15000-16000 -n 1)
-EVAL_FILES="/cephyr/users/lovhag/Alvis/projects/pararel/data/all_n1_atlas/P17_100.jsonl"
+EVAL_FILES="/cephyr/users/lovhag/Alvis/projects/pararel/data/all_n1_atlas/P17_100_no_space.jsonl"
 PASSAGES="data/corpora/wiki/enwiki-dec${YEAR}-DEBUG/text-list-100-sec.jsonl data/corpora/wiki/enwiki-dec${YEAR}-DEBUG/infobox.jsonl"
 SAVE_DIR=data/experiments/
-EXPERIMENT_NAME=test-${size}-pararel-${YEAR}
+EXPERIMENT_NAME=test-no-space-${size}-pararel-${YEAR}
 PRECISION="fp32" # "bf16"
 
 CUDA_VISIBLE_DEVICES=2 CUDA_LAUNCH_BLOCKING=1 python -m debugpy --wait-for-client --listen 5678 -m evaluate \
