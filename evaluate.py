@@ -151,16 +151,16 @@ def evaluate(model, index, opt, data_path, step=None):
                     opt.decoder_prompt_format.format_map({"query": query[k]}), add_special_tokens=False
                 )
                 g = g[len(query_ids) + 1 :]
-            preds = None
-            if model.reader_tokenizer.additional_special_tokens_ids[0] in g:
-                split_ix = torch.isin(g, torch.tensor(model.reader_tokenizer.additional_special_tokens_ids+[1]).cuda()).nonzero()
-                preds = []
-                for ix in range(len(split_ix)-1):
-                    tmp_pred = g[split_ix[ix]:split_ix[ix+1]]
-                    preds.append(reader_tokenizer.decode(tmp_pred, skip_special_tokens=True))
-                pred = preds[0]
-            else:
-                pred = reader_tokenizer.decode(g, skip_special_tokens=True)
+            # preds = None
+            # if model.reader_tokenizer.additional_special_tokens_ids[0] in g:
+            #     split_ix = torch.isin(g, torch.tensor(model.reader_tokenizer.additional_special_tokens_ids+[1]).cuda()).nonzero()
+            #     preds = []
+            #     for ix in range(len(split_ix)-1):
+            #         tmp_pred = g[split_ix[ix]:split_ix[ix+1]]
+            #         preds.append(reader_tokenizer.decode(tmp_pred, skip_special_tokens=True))
+            #     pred = preds[0]
+            # else:
+            pred = reader_tokenizer.decode(g, skip_special_tokens=True)
             gold = [answers[k]] if not "answers" in batch else batch["answers"][k]
             sample_metrics = task.evaluation(pred, gold)
             for key, value in sample_metrics.items():
@@ -168,8 +168,8 @@ def evaluate(model, index, opt, data_path, step=None):
 
             if opt.write_results:
                 ex = {"query": query[k], "answers": gold, "generation": pred}
-                if preds is not None:
-                    ex["generations"] = preds
+                # if preds is not None:
+                #     ex["generations"] = preds
                 if opt.use_decoder_choices:
                     ex["generation_by_choice"] = generation_by_choice[k]
                 if not opt.dont_write_passages:

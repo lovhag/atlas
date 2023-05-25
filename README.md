@@ -133,3 +133,13 @@ Evaluation of parameter- and fine-tuned model on full ParaRel done with `alvis_s
 Atlas has been pretrained on the MLM task, so it should logically not need to be tuned to the MASK format of ParaRel. We investigate this hypothesis by evaluating Atlas out-of-the-box on ParaRel with `alvis_scripts/eval_without_tuning.sh`. This means that we can evaluate Atlas on all 30 ParaRel relations (we skip P37 which is not a N-1 relation).
 
 However, after an initial evaluation on P138, it is quite evident that zero-shot Atlas performs very poorly. This is due to the constrained decoding. Should implement a likelihood-based answer generation instead.
+
+### Generation based on maximum likelihood
+
+Potentially slow, 8 minutes for 100 P17 samples. Amounts to about 218 minutes for 2,730 samples (the total amount of P17 samples) on one GPU. 55 minutes on 4 GPUs.
+
+7 minutes using loss decoding instead. Same without specifically decoding several answer generations separated by sentinel tokens.
+
+Measured for P138 (8760 samples - about 3 hours on 4 GPUs): MORE THAN 4 HOURS
+
+* Potential issue if have an example ``Robin Hood was born in<extra_id_0>'' and different fill-ins for <extra_id_0> might desire a space before, or not?

@@ -575,7 +575,7 @@ class Atlas(nn.Module):
         return loss
 
     @torch.no_grad()
-    def compute_reader_loss_and_logits(self, tokens, decoder_input_ids, labels):
+    def compute_reader_loss_and_logits(self, tokens, decoder_input_ids, labels, encoder_outputs=None):
         cfg = self.reader.encoder.config
         cfg.bsz = tokens["input_ids"].size(0)
         cfg.n_context = min(self.opt.n_context, tokens["input_ids"].size(1))
@@ -586,6 +586,7 @@ class Atlas(nn.Module):
             decoder_input_ids=decoder_input_ids.cuda(),
             labels=labels.cuda(),
             use_cache=False,
+            encoder_outputs=encoder_outputs
         )
         return reader_loss[0].cpu().item(), reader_loss[1]
     
@@ -603,8 +604,8 @@ class Atlas(nn.Module):
         formatted_choices = [f"<extra_id_0> {choice}" for choice in choices]
         labels, decoder_input_ids = self.reader_tokenize(None, formatted_choices, target_tokens=None)
         
-        labels = add_3_after_sentinel_token(labels.clone(), 1)
-        decoder_input_ids = add_3_after_sentinel_token(decoder_input_ids.clone(), 2)
+        #labels = add_3_after_sentinel_token(labels.clone(), 1)
+        #decoder_input_ids = add_3_after_sentinel_token(decoder_input_ids.clone(), 2)
         
         return labels, decoder_input_ids
     
@@ -617,18 +618,29 @@ class Atlas(nn.Module):
                                             choice_generator_labels, 
                                             choice_generator_decoder_input_ids):
             
-        likelihood_list = []
-        for labels, decoder_input_ids in zip(choice_generator_labels, choice_generator_decoder_input_ids):
-            start_of_pred_ix = (decoder_input_ids==3).nonzero().cpu().detach()[0][0]+1
-            end_of_pred_ix = (decoder_input_ids==1).nonzero().cpu().detach()[0][0]
-            loss, logits = self.compute_reader_loss_and_logits(reader_tokens, 
-                                                          decoder_input_ids.unsqueeze(0).repeat(reader_tokens['input_ids'].shape[0]) if reader_tokens['input_ids'].shape[0]>1 else decoder_input_ids.unsqueeze(0), 
-                                                          labels.unsqueeze(0).repeat(reader_tokens.shape[0]) if reader_tokens['input_ids'].shape[0]>1 else labels.unsqueeze(0))
-            # decoder logits start directly with sentinel id, decoder input ids start with <pad> token before sentinel id.
-            probs = nn.Softmax(2)(logits.clone())[:,start_of_pred_ix-1:end_of_pred_ix-1]
-            tot_prob = probs.gather(2, decoder_input_ids[start_of_pred_ix:end_of_pred_ix].unsqueeze(0).unsqueeze(2)).squeeze(2)
-            likelihood_list.append(tot_prob.prod(dim=1).cpu().numpy())
-        choice_ixs = np.array(likelihood_list).argmax(axis=0)
+        # store encoder outputs since we have the same query across alternatives
+        encoder_outputs = self.reader.encoder(
+            input_ids=reader_tokens["input_ids"].cuda().view(reader_tokens["input_ids"].size(0), -1),
+            attention_mask=reader_tokens["attention_mask"].cuda().view(reader_tokens["attention_mask"].size(0), -1),
+            inputs_embeds=None,
+            head_mask=None,
+            output_attentions=None,
+            output_hidden_states=None,
+            return_dict=True,
+        )
+        # use cross-entropy loss to get choice likelihood according to Atlas
+        loss_fct = nn.CrossEntropyLoss(ignore_index=-100, reduction='sum')
+        batch_size = reader_tokens['input_ids'].shape[0]
+        loss_list = np.empty((choice_generator_labels.shape[0], batch_size))
+        # iterate over each answer option
+        for i, (labels, decoder_input_ids) in enumerate(zip(choice_generator_labels, choice_generator_decoder_input_ids)):
+            _, logits = self.compute_reader_loss_and_logits(reader_tokens, 
+                                                          decoder_input_ids.unsqueeze(0).repeat(batch_size) if batch_size>1 else decoder_input_ids.unsqueeze(0), 
+                                                          labels.unsqueeze(0).repeat(batch_size) if batch_size>1 else labels.unsqueeze(0),
+                                                          encoder_outputs=encoder_outputs)
+            loss = loss_fct(logits.view(-1, logits.size(-1)), labels.view(-1)).cpu()
+            loss_list[i,:] = loss
+        choice_ixs = loss_list.argmin(axis=0)
         # dim 0 goes over batch size, return choice per sample in batch
         return [choices[ix] for ix in choice_ixs] # pick over likelihood list values
 
