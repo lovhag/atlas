@@ -136,10 +136,17 @@ However, after an initial evaluation on P138, it is quite evident that zero-shot
 
 ### Generation based on maximum likelihood
 
-Potentially slow, 8 minutes for 100 P17 samples. Amounts to about 218 minutes for 2,730 samples (the total amount of P17 samples) on one GPU. 55 minutes on 4 GPUs.
+#### Runtimes on test case - 100 samples
+Potentially slow, 8 minutes for 100 P17 test samples. Amounts to about 218 minutes for 2,730 samples (the total amount of P17 samples) on one GPU. 55 minutes on 4 GPUs.
 
 7 minutes using loss decoding instead. Same without specifically decoding several answer generations separated by sentinel tokens.
 
+3 minutes using batch size 8 instead of 1 across decoder choices.
+
+#### Runtimes for full cases
 Measured for P138 (8760 samples - about 3 hours on 4 GPUs): MORE THAN 4 HOURS
 
+Measured for P138 (8760 samples): 2.5 hours with choice batch size of 128
+
 * Potential issue if have an example ``Robin Hood was born in<extra_id_0>'' and different fill-ins for <extra_id_0> might desire a space before, or not?
+* Do sentinel splits on token level.

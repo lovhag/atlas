@@ -22,6 +22,10 @@ logger = logging.getLogger(__name__)
 IGNORE_INDEX: int = -100
 BERT_MAX_SEQ_LENGTH: int = 512
 
+def batch(iterable, n=1):
+    l = len(iterable)
+    for ndx in range(0, l, n):
+        yield iterable[ndx:min(ndx + n, l)]
 
 def encode_passages(batch, tokenizer, max_length):
     bsz = len(batch)
@@ -618,6 +622,7 @@ class Atlas(nn.Module):
                                             choice_generator_labels, 
                                             choice_generator_decoder_input_ids):
             
+        assert reader_tokens["input_ids"].size(0)==1, "Can only generate from choices by likelihood for a query sample size of 1"
         # store encoder outputs since we have the same query across alternatives
         encoder_outputs = self.reader.encoder(
             input_ids=reader_tokens["input_ids"].cuda().view(reader_tokens["input_ids"].size(0), -1),
@@ -628,21 +633,34 @@ class Atlas(nn.Module):
             output_hidden_states=None,
             return_dict=True,
         )
+        # encoder_outputs["last_hidden_state"] = encoder_outputs["last_hidden_state"].expand(self.opt.choice_batch_size, -1, -1)
+        # reader_tokens = {"input_ids": reader_tokens["input_ids"].expand(self.opt.choice_batch_size, -1, -1),
+        #                  "attention_mask": reader_tokens["attention_mask"].expand(self.opt.choice_batch_size, -1, -1)}
         # use cross-entropy loss to get choice likelihood according to Atlas
-        loss_fct = nn.CrossEntropyLoss(ignore_index=-100, reduction='sum')
-        batch_size = reader_tokens['input_ids'].shape[0]
-        loss_list = np.empty((choice_generator_labels.shape[0], batch_size))
-        # iterate over each answer option
-        for i, (labels, decoder_input_ids) in enumerate(zip(choice_generator_labels, choice_generator_decoder_input_ids)):
-            _, logits = self.compute_reader_loss_and_logits(reader_tokens, 
-                                                          decoder_input_ids.unsqueeze(0).repeat(batch_size) if batch_size>1 else decoder_input_ids.unsqueeze(0), 
-                                                          labels.unsqueeze(0).repeat(batch_size) if batch_size>1 else labels.unsqueeze(0),
-                                                          encoder_outputs=encoder_outputs)
-            loss = loss_fct(logits.view(-1, logits.size(-1)), labels.view(-1)).cpu()
-            loss_list[i,:] = loss
-        choice_ixs = loss_list.argmin(axis=0)
-        # dim 0 goes over batch size, return choice per sample in batch
-        return [choices[ix] for ix in choice_ixs] # pick over likelihood list values
+        loss_fct = nn.CrossEntropyLoss(ignore_index=-100, reduction='none')
+        loss_list = []
+        # iterate over the answer options
+        for batch_vals in batch(torch.stack((choice_generator_labels, choice_generator_decoder_input_ids), dim=1), n=self.opt.choice_batch_size):
+            batch_size = batch_vals.shape[0]
+            tmp_encoder_outputs = encoder_outputs.copy()
+            tmp_encoder_outputs["last_hidden_state"] = tmp_encoder_outputs["last_hidden_state"].expand(batch_size, -1, -1)
+            # print(f'input ids: {reader_tokens["input_ids"].cuda().view(reader_tokens["input_ids"].size(0), -1).shape}')
+            # print(f'attention mask: {reader_tokens["attention_mask"].cuda().view(reader_tokens["attention_mask"].size(0), -1).shape}')
+            # print(f'decoder ids: {batch_vals[:,1].cuda().shape}')
+            # print(f'encoder outputs: {encoder_outputs["last_hidden_state"].shape}')
+            logits = self.reader(
+                input_ids=reader_tokens["input_ids"].expand(batch_size, -1, -1).cuda().view(batch_size, -1),
+                attention_mask=reader_tokens["attention_mask"].expand(batch_size, -1, -1).cuda().view(batch_size, -1),
+                decoder_input_ids=batch_vals[:,1].cuda(),
+                labels=None,
+                use_cache=False,
+                encoder_outputs=tmp_encoder_outputs
+            ).logits
+            log_probs = loss_fct(logits.reshape(-1, logits.shape[-1]), batch_vals[:,0].reshape(-1)).cpu()
+            log_probs = log_probs.reshape(batch_size, -1)
+            loss_list += log_probs.sum(-1).tolist()
+        choice_ix = np.argmin(loss_list)
+        return choices[choice_ix] # pick over likelihood list values
 
     @torch.no_grad()
     def generate(self, tokens, query, choices=None):

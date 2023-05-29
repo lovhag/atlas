@@ -171,7 +171,7 @@ def evaluate(model, index, opt, data_path, step=None):
                 # if preds is not None:
                 #     ex["generations"] = preds
                 if opt.use_decoder_choices:
-                    ex["generation_by_choice"] = generation_by_choice[k]
+                    ex["generation_by_choice"] = generation_by_choice
                 if not opt.dont_write_passages:
                     ex["passages"] = retrieved_passages[k]
                 if batch_metadata is not None:

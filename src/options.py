@@ -39,6 +39,12 @@ class Options:
             type=int,
             help="Batch size per GPU/CPU for training.",
         )
+        self.parser.add_argument(
+            "--choice_batch_size",
+            default=1,
+            type=int,
+            help="Choice batch size per GPU/CPU for decoding over answer choices.",
+        )
 
         self.parser.add_argument(
             "--per_gpu_embedder_batch_size",
