@@ -139,3 +139,6 @@ The current results for Atlas with retrieval can be found under `pararel-eval-ze
 ## Greedy branch
 
 This is the greedy branch, denoting that we decode Atlas predictions in a greedy fashion. We here make use of the `prefix_allowed_tokens_fn` to constrain the answer generations by the model. Can e.g. observe for relation P138 that the model often predicts "arrow", "AIDS" or similarly, most likely due to that these answers start with "a" and that we have greedy decoding.
+
+To run an evaluation, use `alvis_scripts/eval_no_space.sh`.
+To debug the code, use `alvis_scripts/test_choices.sh`.
