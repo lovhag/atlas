@@ -136,6 +136,9 @@ Atlas has been pretrained on the MLM task, so it should logically not need to be
 
 For this branch, the model generations are based on maximum likelihood estimations over the different answer options. This means that the code is more slow, and more dependent on using the right format for the answer alternatives. This also means that we avoid the issues caused by the greedy decoding, in that the model most likely won't be as prone to generate certain answers just because they start with "a".
 
+To evaluate Atlas using this code, use `alvis_scripts/eval_no_space.sh`.
+To test this code, use `alvis_scripts/test_error_cases.sh`.
+
 ### Runtimes on test case - 100 samples
 Potentially slow, 8 minutes for 100 P17 test samples. Amounts to about 218 minutes for 2,730 samples (the total amount of P17 samples) on one GPU. 55 minutes on 4 GPUs.
 
