@@ -132,21 +132,21 @@ Evaluation of parameter- and fine-tuned model on full ParaRel done with `alvis_s
 
 Atlas has been pretrained on the MLM task, so it should logically not need to be tuned to the MASK format of ParaRel. We investigate this hypothesis by evaluating Atlas out-of-the-box on ParaRel with `alvis_scripts/eval_without_tuning.sh`. This means that we can evaluate Atlas on all 30 ParaRel relations (we skip P37 which is not a N-1 relation).
 
-However, after an initial evaluation on P138, it is quite evident that zero-shot Atlas performs very poorly. This is due to the constrained decoding. Should implement a likelihood-based answer generation instead.
+## likelihood-decoding branch
 
-### Generation based on maximum likelihood
+For this branch, the model generations are based on maximum likelihood estimations over the different answer options. This means that the code is more slow, and more dependent on using the right format for the answer alternatives. This also means that we avoid the issues caused by the greedy decoding, in that the model most likely won't be as prone to generate certain answers just because they start with "a".
 
-#### Runtimes on test case - 100 samples
+### Runtimes on test case - 100 samples
 Potentially slow, 8 minutes for 100 P17 test samples. Amounts to about 218 minutes for 2,730 samples (the total amount of P17 samples) on one GPU. 55 minutes on 4 GPUs.
 
 7 minutes using loss decoding instead. Same without specifically decoding several answer generations separated by sentinel tokens.
 
 3 minutes using batch size 8 instead of 1 across decoder choices.
 
-#### Runtimes for full cases
-Measured for P138 (8760 samples - about 3 hours on 4 GPUs): MORE THAN 4 HOURS
-
+### Runtimes for full cases
 Measured for P138 (8760 samples): 2.5 hours with choice batch size of 128
+    * Use same encoding values
+    * Use a large decoding batch size
 
 * Potential issue if have an example ``Robin Hood was born in<extra_id_0>'' and different fill-ins for <extra_id_0> might desire a space before, or not?
 * Do sentinel splits on token level.
