@@ -135,3 +135,7 @@ Atlas has been pretrained on the MLM task, so it should logically not need to be
 However, the decoding of Atlas' predictions must be in the correct format for the model. Otherwise, it would be necessary to fine-tune the model to the format. The generations of Atlas look as follows `[0, 32099, 3, ...]`, so the constrained decoding (`prefix_allowed_tokens_fn`) must follow this format.
 
 The current results for Atlas with retrieval can be found under `pararel-eval-zero-shot-base` and `hyperparam-tuned`. The current baseline results can be found under `pararel-eval-baseline-closed-book` and `hyperparam-tuned-closed-book`.
+
+## Greedy branch
+
+This is the greedy branch, denoting that we decode Atlas predictions in a greedy fashion. We here make use of the `prefix_allowed_tokens_fn` to constrain the answer generations by the model. Can e.g. observe for relation P138 that the model often predicts "arrow", "AIDS" or similarly, most likely due to that these answers start with "a" and that we have greedy decoding.
