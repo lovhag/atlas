@@ -164,7 +164,7 @@ DESIDERATA
     * Removing <eos> token doesn't help with this. Can observe predicitons in `data/logs/pararel_eval_zero_shot_no_space_likelihood_no_eos` for P140 for which the model freely generates "Christianity", but can't pick it in the answer option (generates "Islam" instead). Incapable of choosing "Christianity"? 
         * Seems to be an issue from when a sentence starts with the <extra_id_0>, a 3 must be added in those cases. Otherwise, the model will be completely confused.
 
-New run folder: `data/logs/pararel-eval-zero-shot-no-space-likelihood-no-eos-with-3`
+New run folder: `data/logs/pararel-eval-zero-shot-no-space-likelihood-no-eos-with-3` using `eval_no_space.sh`.
     * And now things seem to work! E.g. the freely generated predictions mostly match the likelihood decoded ones.
 
 TODOs
