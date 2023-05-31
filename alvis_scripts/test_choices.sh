@@ -8,7 +8,7 @@ YEAR=${1:-"2017"}
 MODEL_TO_EVAL=data/models/atlas/${size}
 
 port=$(shuf -i 15000-16000 -n 1)
-EVAL_FILES="/cephyr/users/lovhag/Alvis/projects/pararel/data/all_n1_atlas_no_space/P17_100.jsonl"
+EVAL_FILES="/cephyr/users/lovhag/Alvis/projects/pararel/data/all_n1_atlas_no_space/P140_100.jsonl"
 PASSAGES="data/corpora/wiki/enwiki-dec${YEAR}-DEBUG/text-list-100-sec.jsonl data/corpora/wiki/enwiki-dec${YEAR}-DEBUG/infobox.jsonl"
 SAVE_DIR=data/experiments/
 EXPERIMENT_NAME=test-likelihood-${size}-pararel-${YEAR}

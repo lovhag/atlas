@@ -608,10 +608,15 @@ class Atlas(nn.Module):
         formatted_choices = [f"<extra_id_0> {choice}" for choice in choices]
         labels, decoder_input_ids = self.reader_tokenize(None, formatted_choices, target_tokens=None)
         
-        #labels = add_3_after_sentinel_token(labels.clone(), 1)
-        #decoder_input_ids = add_3_after_sentinel_token(decoder_input_ids.clone(), 2)
+        # TEMP ADD - also options with preceding 3 token
+        labels = torch.cat((labels, add_3_after_sentinel_token(labels.clone(), 1)), 0)
+        decoder_input_ids = torch.cat((decoder_input_ids, add_3_after_sentinel_token(decoder_input_ids.clone(), 2)), 0)
+        choices += choices
         
-        return labels, decoder_input_ids
+        # skip the end of string token for the answer options
+        labels[labels==1] = -100
+        
+        return choices, labels, decoder_input_ids
     
     # TODO: rank predictions?   
     @torch.no_grad()

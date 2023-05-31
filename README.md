@@ -153,3 +153,20 @@ Measured for P138 (8760 samples): 2.5 hours with choice batch size of 128
 
 * Potential issue if have an example ``Robin Hood was born in<extra_id_0>'' and different fill-ins for <extra_id_0> might desire a space before, or not?
 * Do sentinel splits on token level.
+    * Investigated in `experiment_with_answer_generation.ipynb`, but it doesn't really seem to matter if this is done at a token-level.
+    * Can however confirm that the sentinel id should be added without a preceding space.
+* Found that the end-of-string token might cause issues, removed this for the loss calculation and results seem more promising?
+
+New run folder: `data/logs/pararel_eval_zero_shot_no_space_likelihood_no_eos`
+
+DESIDERATA
+* Freely generated answers that match with one of the answer options should then also match with the by-choice-generation of the model.
+    * Removing <eos> token doesn't help with this. Can observe predicitons in `data/logs/pararel_eval_zero_shot_no_space_likelihood_no_eos` for P140 for which the model freely generates "Christianity", but can't pick it in the answer option (generates "Islam" instead). Incapable of choosing "Christianity"? 
+        * Seems to be an issue from when a sentence starts with the <extra_id_0>, a 3 must be added in those cases. Otherwise, the model will be completely confused.
+
+New run folder: `data/logs/pararel-eval-zero-shot-no-space-likelihood-no-eos-with-3`
+    * And now things seem to work! E.g. the freely generated predictions mostly match the likelihood decoded ones.
+
+TODOs
+* Get Atlas closed-book results
+* Get T5-base results

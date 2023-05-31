@@ -99,7 +99,7 @@ def evaluate(model, index, opt, data_path, step=None):
         decoder_choices_file = os.path.splitext(data_path)[0]+"_options.txt"
         with open(decoder_choices_file) as f:
             decoder_choices = [line.strip() for line in f.readlines()]
-        choice_generator_labels, choice_generator_decoder_input_ids = unwrapped_model.get_choice_generator_values(decoder_choices)
+        decoder_choices, choice_generator_labels, choice_generator_decoder_input_ids = unwrapped_model.get_choice_generator_values(decoder_choices)
 
     for i, batch in enumerate(data_iterator):
         query = batch.get("query", [""])
