@@ -3,12 +3,12 @@
 #SBATCH -A SNIC2022-22-1040
 #SBATCH -N 1
 #SBATCH --ntasks-per-node=4
-#SBATCH --gpus-per-node=T4:4
+#SBATCH --gpus-per-node=A40:4
 #SBATCH --job-name=eval-baseline-t5-pararel
-#SBATCH -o /mimer/NOBACKUP/groups/snic2021-23-309/project-data/atlas/logs/pararel_eval_baseline_t5_%A_%a.out
+#SBATCH -o /mimer/NOBACKUP/groups/snic2021-23-309/project-data/atlas/logs/pararel_eval_baseline_t5_likelihood_no_eos_with_3_%A_%a.out
 #SBATCH -t 0-04:00:00
 
-# COMMENT: this is largely a copy of eval_tuned.sh, only without retrieval and for a baseline T5
+# COMMENT: this is largely a copy of eval_no_space.sh, only without retrieval and for a baseline T5
 
 set -eo pipefail
 
@@ -24,8 +24,8 @@ YEAR=${1:-"2017"}
 MODEL_TO_EVAL='google/t5-base-lm-adapt' # Basline T5 model
 
 port=$(shuf -i 15000-16000 -n 1)
-EVAL_FILES="/cephyr/users/lovhag/Alvis/projects/pararel/data/all_n1_atlas/${RELATION_TO_EVAL}.jsonl"
-SAVE_DIR=data/experiments/pararel_eval_baseline_t5
+EVAL_FILES="/cephyr/users/lovhag/Alvis/projects/pararel/data/all_n1_atlas_no_space/${RELATION_TO_EVAL}.jsonl"
+SAVE_DIR=data/experiments/pararel-eval-baseline-t5-no-space-likelihood-no-eos-with-3
 EXPERIMENT_NAME=${RELATION_TO_EVAL}-${SLURM_JOB_ID}
 PRECISION="fp32" # "bf16"
 
@@ -45,4 +45,5 @@ srun python evaluate_baseline.py \
     --write_results \
     --qa_prompt_format "{question}" \
     --use_decoder_choices \
+    --choice_batch_size 256 \
     --closed_book

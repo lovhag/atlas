@@ -167,6 +167,8 @@ DESIDERATA
 New run folder: `data/logs/pararel-eval-zero-shot-no-space-likelihood-no-eos-with-3` using `eval_no_space.sh`.
     * And now things seem to work! E.g. the freely generated predictions mostly match the likelihood decoded ones.
 
-TODOs
-* Get Atlas closed-book results
-* Get T5-base results
+## Baselines
+* Atlas closed-book
+    * `baselines/eval_closed_book.sh`
+* T5-base
+    * `baselines/eval_baseline_t5.sh`
