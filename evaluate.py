@@ -107,11 +107,15 @@ def evaluate(model, index, opt, data_path, step=None):
         batch_metadata = batch.get("metadata")
         target_tokens = batch.get("target_tokens")
         query_enc, labels, decoder_input_ids = unwrapped_model.tokenize(query, answers, target_tokens=target_tokens)
-        # handle case if we do not have a retriever
-        if query_enc is None:
-            retrieved_passages = [[{"title": None, "text": None}]*len(query)] # this will not matter later on, but should make the code run
+        if opt.use_file_passages:
+            #assert "passages" in batch, "cant use use_file_passages mode without passing in passages"
+            retrieved_passages = batch.get("passages", [""])
+            #retrieved_passages = [p[: opt.n_context] for p in retrieved_passages]
         else:
-            if not opt.use_file_passages:
+            # handle case if we do not have a retriever
+            if query_enc is None:
+                retrieved_passages = [[{"title": None, "text": None}]*len(query)] # this will not matter later on, but should make the code run
+            else:
                 query_ids_retriever = query_enc["input_ids"].cuda()
                 query_mask_retriever = query_enc["attention_mask"].cuda()
                 retrieved_passages, _ = unwrapped_model.retrieve(
@@ -123,9 +127,6 @@ def evaluate(model, index, opt, data_path, step=None):
                     batch_metadata=batch_metadata,
                     filtering_fun=task.filter,
                 )
-            else:
-                assert "passages" in batch, "cant use use_file_passages mode without passing in passages"
-                retrieved_passages = [p[: opt.n_context] for p in batch["passages"]]
 
         # If example is a padding example then skip step
         if (len(query) == 0) or (len(query[0]) == 0):
@@ -184,6 +185,8 @@ def evaluate(model, index, opt, data_path, step=None):
                     ex["sub_label"] = batch["sub_label"][k]
                 if "pattern" in batch:
                     ex["pattern"] = batch["pattern"][k]
+                if opt.use_file_passages:
+                    ex["passages_pattern"] = batch["passages_pattern"][k]
                 dataset_wpred.append(ex)
 
     metrics, dataset_wpred = task.evaluation_postprocessing(metrics, dataset_wpred)

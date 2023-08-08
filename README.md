@@ -42,7 +42,7 @@ python preprocessing/prepare_templama.py --output_directory data
 ```
 
 ## Time to create passage embeddings
- 1st step 12 minutes, 256512 passages out of 26931153 (1%). Would take approx 21 hours to complete?
+ 1st step 12 minutes, 256512 passages out of 26,931,153 (1%). Would take approx 21 hours to complete?
 26931153/256512*12/60=21
 
 For the full 2017 corpus, takes about 2 hours on 4 A40:4. Requires about 366GB in size.
@@ -172,3 +172,34 @@ New run folder: `data/logs/pararel-eval-zero-shot-no-space-likelihood-no-eos-wit
     * `baselines/eval_closed_book.sh`
 * T5-base
     * `baselines/eval_baseline_t5.sh`
+
+## Atlas-large
+
+It would be interesting to also get Atlas-large results. This model has 770M parameters (compared to the 220M parameters of Atlas-base). We also need to pre-calculate its passage embeddings.
+
+### Get passage embeddings
+
+Same passages as for Atlas-base (Wikipedia 2017). Run on 8 A40:4. Time: 47 minutes.
+
+Saved to `data/saved_index/atlas-large-wiki-2017`.
+
+### Test evaluation on P937
+
+Takes approx 27 minutes on 4 A40:4.
+
+## Run Atlas with fixed passages
+
+Use the `--use_file_passages` option. Then assumes that a field `passages` can be found in the training data.
+
+## Compute retriever embeddings 
+
+Run 
+```bash
+sbatch --array=0-29 alvis_scripts/compute_retriever_embeddings/atlas_base.sh
+```
+
+and 
+
+```bash
+sbatch --array=0-29 alvis_scripts/compute_retriever_embeddings/atlas_large.sh
+```
