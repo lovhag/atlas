@@ -64,5 +64,5 @@ srun python train.py \
     --index_mode flat \
     --passages ${PASSAGES}\
     --qa_prompt_format "{question}" \
-    --load_index_path data/experiments/853398-base-templama-2017/saved_index  \
+    --load_index_path data/saved_index/atlas-base-wiki-2017  \
     --use_decoder_choices
