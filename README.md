@@ -80,7 +80,7 @@ See the evalluation method for each model below.
 Evaluation of Atlas-base zero-shot on ParaRel is done using the following command:
 
 ```bash
-sbatch --array=0-27 alvis_scripts/eval_no_space.sh
+sbatch --array=0-29 alvis_scripts/eval_no_space.sh
 ```
 
 For testing, use `alvis_scripts/test_error_cases.sh`.
@@ -90,7 +90,7 @@ For testing, use `alvis_scripts/test_error_cases.sh`.
 This model has 770M parameters (compared to the 220M parameters of Atlas-base). Use the following code to evaluate it.
 
 ```bash
-sbatch --array=0-27 alvis_scripts/eval_large.sh
+sbatch --array=0-29 alvis_scripts/eval_large.sh
 ```
 
 ### Baselines
